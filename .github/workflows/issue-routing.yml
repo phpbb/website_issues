@@ -3,13 +3,14 @@ name: Issue routing
 
 on:
   issues:
-    types: [opened, reopened, labeled]
+    types: [opened, reopened, labeled, unlabeled, unassigned]
 
 permissions:
   contents: read
   issues: write
 
-# Opening an issue from a form also fires `labeled` for the form's labels;
+# Opening an issue from a form also fires `labeled` for the form's labels, and
+# removing labels or assignees fires more events;
 # handle the events for one issue one at a time.
 concurrency:
   group: issue-routing-${{ github.event.issue.number }}

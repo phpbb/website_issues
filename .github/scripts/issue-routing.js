@@ -146,6 +146,11 @@ async function route({ github, context, core, getOctokit }) {
 	let labels = issue.labels.map((label) => (typeof label === 'string' ? label : label.name));
 	let assignees = issue.assignees.map((user) => user.login);
 
+	// Tidying up a closed issue should not bring the fallback back.
+	if (issue.state === 'closed' && ['unlabeled', 'unassigned'].includes(context.payload.action)) {
+		return;
+	}
+
 	// 1. Label from the form's area dropdown.
 	if (['opened', 'reopened'].includes(context.payload.action)) {
 		const area = formAnswer(issue.body, config.areaField);
@@ -161,10 +166,14 @@ async function route({ github, context, core, getOctokit }) {
 	}
 
 	// 2. Assign the teams of routed labels. On `labeled` only the new label counts,
-	//    so people removed by hand for earlier labels are not re-added.
-	const routedLabels = context.payload.action === 'labeled'
-		? [context.payload.label.name]
-		: labels;
+	//    so people removed by hand for earlier labels are not re-added; `unlabeled`
+	//    and `unassigned` only need the fallback check below.
+	let routedLabels = [];
+	if (['opened', 'reopened'].includes(context.payload.action)) {
+		routedLabels = labels;
+	} else if (context.payload.action === 'labeled' && labels.includes(context.payload.label.name)) {
+		routedLabels = [context.payload.label.name];
+	}
 	for (const label of routedLabels) {
 		const entry = config.labels[label];
 		if (entry) {
