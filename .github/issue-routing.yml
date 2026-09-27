@@ -1,0 +1,65 @@
+# Issue routing: which labels an issue gets and who is assigned to it.
+#
+# This is the only place sites, labels and teams are defined. The "area" dropdown in
+# the issue forms (.github/ISSUE_TEMPLATE/*.yml) is generated from this file
+# automatically when it changes, so never edit those options by hand.
+#
+# How it works:
+#   1. Each entry under `labels` is a label. If it has an `area`, that text is an option
+#      in the issue form's dropdown, and picking it adds the label to a new issue.
+#   2. For every label on an issue, the members of its `teams` (and any extra `users`)
+#      are assigned. Adding one of these labels later assigns that label's team too.
+#   3. An issue always ends up with at least one label and one assignee: if it has
+#      none, the label marked `fallback: true` and its team are used. The fallback
+#      label is removed again once another routed label is added.
+#
+# Keys per label:
+#   area         Text shown in the form dropdown (optional; leave out for labels that
+#                are only added by hand). Dropdown order follows this file.
+#   teams        Team slugs in the phpbb organisation: development-team, extensions-team,
+#                management, styles-team, support-team, website-team.
+#   users        Extra GitHub usernames to assign (optional).
+#   color        Label colour, used when the label is created. Quote it.
+#   description  Label description, used when the label is created.
+#   fallback     true on exactly one label: used for issues nobody else picked up.
+
+# The dropdown heading in the issue forms.
+area_field: Which site or area is affected?
+
+labels:
+  "site: www":
+    area: www.phpbb.com
+    color: "1d76db"
+    description: www.phpbb.com
+    teams: [website-team]
+  "site: area51":
+    area: area51.phpbb.com
+    color: "5319e7"
+    description: area51.phpbb.com
+    teams: [website-team, development-team]
+  "site: blog":
+    area: blog.phpbb.com
+    color: "c5def5"
+    description: blog.phpbb.com
+    teams: [website-team]
+  "site: tracker":
+    area: tracker.phpbb.com (the tracker itself, not phpBB bugs)
+    color: "bfd4f2"
+    description: tracker.phpbb.com
+    teams: [website-team, development-team]
+  downloads:
+    area: Downloads
+    color: "0e8a16"
+    description: Downloads and the download pages
+    teams: [website-team]
+  accounts:
+    area: Sign-in / account
+    color: "fbca04"
+    description: Sign-in, registration and accounts
+    teams: [website-team]
+  needs triage:
+    area: Something else / not sure
+    fallback: true
+    color: "d4c5f9"
+    description: Needs to be looked at and routed
+    teams: [website-team]

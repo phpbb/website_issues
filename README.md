@@ -1,7 +1,7 @@
 # phpBB.com website issues
 
-The issue tracker for the phpBB.com websites themselves — [www.phpbb.com](https://www.phpbb.com),
-[area51.phpbb.com](https://area51.phpbb.com) and related subdomains.
+The issue tracker for the phpBB.com websites themselves — [www.phpbb.com](https://www.phpbb.com)
+and its subdomains, such as area51, the blog and the tracker.
 
 ## What belongs here
 

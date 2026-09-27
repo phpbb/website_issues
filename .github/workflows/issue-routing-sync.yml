@@ -1,0 +1,116 @@
+# Keeps the issue forms in step with .github/issue-routing.yml: validates the config,
+# regenerates the forms' area dropdown from it and commits the result back.
+#
+# The scripts come from the checked-out branch, so they only run in the read-only
+# `generate` job. The `commit` job has write access but runs none of the branch's
+# code: it only copies the generated forms in and pushes them.
+name: Sync issue routing
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/issue-routing.yml
+      - .github/ISSUE_TEMPLATE/**
+      - .github/scripts/**
+  pull_request:
+    paths:
+      - .github/issue-routing.yml
+      - .github/ISSUE_TEMPLATE/**
+      - .github/scripts/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: issue-routing-sync-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pull requests from forks cannot be pushed to; they are only validated.
+  CAN_PUSH: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+  REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+  REF: ${{ github.event.pull_request.head.ref || github.ref }}
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ env.REPOSITORY }}
+          ref: ${{ env.REF }}
+          persist-credentials: false
+
+      - name: Regenerate issue forms
+        run: .github/scripts/sync-issue-forms.sh
+
+      - name: Validate
+        run: |
+          yq -o=json .github/issue-routing.yml > "$RUNNER_TEMP/issue-routing.json"
+          forms=()
+          for form in .github/ISSUE_TEMPLATE/*.yml; do
+            [ "$(basename "$form")" = config.yml ] && continue
+            yq -o=json "$form" > "$RUNNER_TEMP/$(basename "$form").json"
+            forms+=("$RUNNER_TEMP/$(basename "$form").json")
+          done
+          node .github/scripts/issue-routing.js validate "$RUNNER_TEMP/issue-routing.json" "${forms[@]}"
+
+      - name: Check for changes
+        id: diff
+        run: |
+          if git diff --quiet -- .github/ISSUE_TEMPLATE; then
+            echo "Issue forms are up to date."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff -- .github/ISSUE_TEMPLATE
+          if [ "$CAN_PUSH" != true ]; then
+            echo "::error::The issue forms are out of date. Run .github/scripts/sync-issue-forms.sh and commit the result."
+            exit 1
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Upload regenerated forms
+        if: steps.diff.outputs.changed == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: issue-forms
+          path: .github/ISSUE_TEMPLATE/*.yml
+          include-hidden-files: true
+          retention-days: 1
+
+  commit:
+    needs: generate
+    if: needs.generate.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ env.REPOSITORY }}
+          ref: ${{ env.REF }}
+
+      - name: Download regenerated forms
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: issue-forms
+          path: ${{ runner.temp }}/issue-forms
+
+      - name: Commit regenerated forms
+        run: |
+          # Only issue form files are taken over, whatever else the artifact holds.
+          find "$RUNNER_TEMP/issue-forms" -maxdepth 1 -type f -name '*.yml' -exec cp {} .github/ISSUE_TEMPLATE/ \;
+          if git diff --quiet -- .github/ISSUE_TEMPLATE; then
+            echo "Issue forms are already up to date."
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898233+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Regenerate issue form areas from issue-routing.yml' -- .github/ISSUE_TEMPLATE
+          git push

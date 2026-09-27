@@ -1,0 +1,52 @@
+# Labels and assigns new issues. Routing is configured in .github/issue-routing.yml.
+name: Issue routing
+
+on:
+  issues:
+    types: [opened, reopened, labeled, unlabeled, unassigned]
+
+permissions:
+  contents: read
+  issues: write
+
+# Opening an issue from a form also fires `labeled` for the form's labels, and
+# removing labels or assignees fires more events;
+# handle the events for one issue one at a time.
+concurrency:
+  group: issue-routing-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  route:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout routing config
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github
+          persist-credentials: false
+
+      # GITHUB_TOKEN cannot read organisation teams, so a GitHub App installed on
+      # the phpbb organisation with "Members: read" provides a token for that.
+      - name: Create team lookup token
+        id: app-token
+        if: vars.ISSUE_ROUTING_APP_CLIENT_ID != ''
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.ISSUE_ROUTING_APP_CLIENT_ID }}
+          private-key: ${{ secrets.ISSUE_ROUTING_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          permission-members: read
+
+      - name: Load routing config
+        run: yq -o=json .github/issue-routing.yml > "$RUNNER_TEMP/issue-routing.json"
+
+      - name: Label and assign
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ROUTING_CONFIG: ${{ runner.temp }}/issue-routing.json
+          TEAM_TOKEN: ${{ steps.app-token.outputs.token }}
+        with:
+          script: |
+            const { route } = require('./.github/scripts/issue-routing.js');
+            await route({ github, context, core, getOctokit });
