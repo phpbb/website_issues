@@ -1,0 +1,66 @@
+# Keeps the issue forms in step with .github/issue-routing.yml: validates the config,
+# regenerates the forms' area dropdown from it and commits the result back.
+name: Sync issue routing
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/issue-routing.yml
+      - .github/ISSUE_TEMPLATE/**
+      - .github/scripts/**
+  pull_request:
+    paths:
+      - .github/issue-routing.yml
+      - .github/ISSUE_TEMPLATE/**
+      - .github/scripts/**
+
+permissions:
+  contents: write
+
+concurrency:
+  group: issue-routing-sync-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    # Pull requests from forks cannot be pushed to; they are only validated.
+    env:
+      CAN_PUSH: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+
+      - name: Regenerate issue forms
+        run: .github/scripts/sync-issue-forms.sh
+
+      - name: Validate
+        run: |
+          yq -o=json .github/issue-routing.yml > "$RUNNER_TEMP/issue-routing.json"
+          forms=()
+          for form in .github/ISSUE_TEMPLATE/*.yml; do
+            [ "$(basename "$form")" = config.yml ] && continue
+            yq -o=json "$form" > "$RUNNER_TEMP/$(basename "$form").json"
+            forms+=("$RUNNER_TEMP/$(basename "$form").json")
+          done
+          node .github/scripts/issue-routing.js validate "$RUNNER_TEMP/issue-routing.json" "${forms[@]}"
+
+      - name: Commit regenerated forms
+        run: |
+          if git diff --quiet -- .github/ISSUE_TEMPLATE; then
+            echo "Issue forms are up to date."
+            exit 0
+          fi
+          git diff -- .github/ISSUE_TEMPLATE
+          if [ "$CAN_PUSH" != true ]; then
+            echo "::error::The issue forms are out of date. Run .github/scripts/sync-issue-forms.sh and commit the result."
+            exit 1
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898233+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Regenerate issue form areas from issue-routing.yml' -- .github/ISSUE_TEMPLATE
+          git push

@@ -1,0 +1,57 @@
+name: Bug report
+description: Something on the phpBB.com websites is broken or wrong
+labels: [bug]
+type: Bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! This tracker is for the phpBB.com websites only. Bugs in the phpBB
+        software go to [tracker.phpbb.com](https://tracker.phpbb.com/browse/PHPBB3), and security
+        problems must be [reported privately](https://github.com/phpbb/website_issues/security).
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which site or area is affected?
+      options:
+        - www.phpbb.com
+        - area51.phpbb.com
+        - blog.phpbb.com
+        - tracker.phpbb.com (the tracker itself, not phpBB bugs)
+        - Downloads
+        - Sign-in / account
+        - Something else / not sure
+    validations:
+      required: true
+  - type: input
+    id: url
+    attributes:
+      label: Page URL
+      description: The address of the page where you saw the problem, if there is one.
+      placeholder: https://www.phpbb.com/...
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: To reproduce
+      description: Steps to reproduce the behaviour.
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. See error
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: What you expected to happen instead.
+  - type: textarea
+    id: context
+    attributes:
+      label: Screenshots and additional context
+      description: Screenshots, browser and operating system, or anything else that helps.
